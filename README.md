@@ -27,7 +27,7 @@ By rewriting the rendering pipeline natively using KDE Plasma's QML and Qt's `Sh
 
 1. Open **System Settings** → **Wallpaper** (or **Screen Locker**).
 2. Click **"Get New Wallpaper Plugins..."**
-3. Search for **"Matrix Digital Rain"** and click **Install**.
+3. Search for **"KDE Plasma Matrix Screensaver & Wallpaper"** and click **Install**.
 
 ### From GitHub Releases
 
