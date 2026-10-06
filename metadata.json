@@ -1,28 +1,30 @@
 {
-    "KPackageStructure": "Plasma/Wallpaper",
-    "KPlugin": {
-        "Id": "org.kde.plasma.matrix-screensaver",
-        "Name": "Matrix Digital Rain",
-        "Description": "GPU-accelerated Matrix digital rain wallpaper and screensaver for KDE Plasma 6.",
-        "Icon": "preferences-desktop-screensaver",
-        "ServiceTypes": [
-            "Plasma/Wallpaper"
-        ],
-        "Authors": [
-            {
-                "Name": "a.key",
-                "Email": "a.key@moronet.pl"
-            }
-        ],
-        "Version": "1.1.0",
-        "License": "MIT",
-        "Website": "https://github.com/akeyx/kde-matrix-screensaver",
-        "BugReportUrl": "https://github.com/akeyx/kde-matrix-screensaver/issues",
-        "FormFactors": [
-            "desktop",
-            "tablet"
-        ],
-        "EnabledByDefault": true
-    },
-    "X-Plasma-API-Minimum-Version": "6.0"
+  "KPackageStructure": "Plasma/Wallpaper",
+  "KPlugin": {
+    "Id": "org.kde.plasma.matrix-screensaver",
+    "Name": "Matrix Digital Rain",
+    "Description": "GPU-accelerated Matrix digital rain wallpaper and screensaver for KDE Plasma 6.",
+    "Icon": "preferences-desktop-screensaver",
+    "ServiceTypes": [
+      "Plasma/Wallpaper"
+    ],
+    "Authors": [
+      {
+        "Name": "a.key",
+        "Email": "a.key@moronet.pl"
+      }
+    ],
+    "Version": "1.3.0",
+    "License": "MIT",
+    "Website": "https://github.com/akeyx/kde-matrix-screensaver",
+    "BugReportUrl": "https://github.com/akeyx/kde-matrix-screensaver/issues",
+    "FormFactors": [
+      "desktop",
+      "tablet"
+    ],
+    "EnabledByDefault": true
+  },
+  "X-Plasma-API": "declarativeappletscript",
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "X-KDE-ParentApp": "org.kde.plasmashell"
 }
