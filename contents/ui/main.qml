@@ -8,6 +8,7 @@ WallpaperItem {
     height: 600
 
     readonly property var defaultConfig: ({
+        performanceMode: false,
         scalingMode: 1,
         characterSize: 40,
         numColumns: 80,
@@ -27,11 +28,24 @@ WallpaperItem {
         glintColor: '#c1ff75'
     })
 
-    readonly property var activeConfig: (root.configuration && root.configuration.characterSize !== undefined) ? root.configuration : root.defaultConfig
+    // Standalone previews cannot replace WallpaperItem's typed configuration.
+    property var testProxyConfig: null
+    readonly property var activeConfig: root.testProxyConfig ? root.testProxyConfig : ((root.configuration && root.configuration.characterSize !== undefined) ? root.configuration : root.defaultConfig)
+
+    readonly property bool performanceMode: activeConfig.performanceMode === true
+
+    // Coalesce grid changes and refresh even when glyph cycling is paused.
+    function refreshGlyphTexture() {
+        containerSource.scheduleUpdate()
+    }
+    function requestGlyphRefresh() {
+        Qt.callLater(refreshGlyphTexture)
+    }
 
     FontLoader {
         id: matrixFont
         source: '../fonts/Matrix-Code.ttf'
+        onStatusChanged: root.requestGlyphRefresh()
     }
 
     readonly property int columnsCount: {
@@ -46,7 +60,7 @@ WallpaperItem {
 
     property real baseHue: 0.3
     property real baseSat: 1.0
-    property color activeCursorColor: activeConfig.cursorColor || '#2de500'
+    property color activeCursorColor: activeConfig.cursorColor || root.defaultConfig.cursorColor
     property color activeGlyphColor: activeConfig.glyphColor || '#006618'
     property real activeHue: activeCursorColor.hslHue
     property real activeSat: activeCursorColor.hslSaturation
@@ -78,6 +92,7 @@ WallpaperItem {
             origin.x: container.width / 2
             origin.y: container.height / 2
             angle: (activeConfig.slant !== undefined ? activeConfig.slant : 0.0) * 180 / Math.PI
+            onAngleChanged: root.requestGlyphRefresh()
         }
 
         Repeater {
@@ -132,37 +147,68 @@ WallpaperItem {
         }
     }
 
-    // Schedule container cache update on resize
-    onWidthChanged: containerSource.scheduleUpdate()
-    onHeightChanged: containerSource.scheduleUpdate()
+    // A static texture must also refresh after layout/configuration changes.
+    onWidthChanged: requestGlyphRefresh()
+    onHeightChanged: requestGlyphRefresh()
+    onColumnsCountChanged: requestGlyphRefresh()
+    onColWidthChanged: requestGlyphRefresh()
+    onPerformanceModeChanged: requestGlyphRefresh()
 
-    // Low-frequency cycle timer for subtle character mutation without freezing CPU
+    // Normal mode retains upstream's default per-cell mutation rate.
+    // Performance mode intentionally changes only one cell per slow tick.
     Timer {
         id: cycleTimer
-        interval: Math.max(1000, Math.floor(30 / Math.max(0.001, activeConfig.cycleSpeed !== undefined ? activeConfig.cycleSpeed : 0.01)))
-        running: (activeConfig.cycleSpeed !== undefined ? activeConfig.cycleSpeed > 0 : false) && (activeConfig.animationSpeed !== undefined ? activeConfig.animationSpeed > 0 : true)
+        interval: root.performanceMode ? Math.max(1000, Math.floor(30 / Math.max(0.001, activeConfig.cycleSpeed !== undefined ? activeConfig.cycleSpeed : 0.01))) : 33
+        running: (activeConfig.cycleSpeed !== undefined ? activeConfig.cycleSpeed > 0 : true) && (activeConfig.animationSpeed !== undefined ? activeConfig.animationSpeed > 0 : true)
         repeat: true
         onTriggered: {
             if (columnsRepeater.count === 0) return;
-            let randomCol = Math.floor(Math.random() * columnsRepeater.count);
-            let colItem = columnsRepeater.itemAt(randomCol);
-            if (colItem && typeof colItem.randomizeRandomCell === 'function') {
-                colItem.randomizeRandomCell();
+            const cycleSpeed = activeConfig.cycleSpeed !== undefined ? activeConfig.cycleSpeed : root.defaultConfig.cycleSpeed;
+            const totalCells = root.columnsCount * (Math.ceil(root.height / root.colWidth) + 3);
+            const changes = root.performanceMode ? 1 : Math.max(1, Math.floor(1.8 * (cycleSpeed / 0.03) * totalCells / 30));
+            for (let i = 0; i < changes; ++i) {
+                let randomCol = Math.floor(Math.random() * columnsRepeater.count);
+                let colItem = columnsRepeater.itemAt(randomCol);
+                if (colItem) colItem.randomizeRandomCell();
             }
-            containerSource.scheduleUpdate();
+            if (root.performanceMode) containerSource.scheduleUpdate();
         }
     }
 
-    // Static GPU texture cache for text grid - avoids re-rasterizing thousands of Text items every frame
+    // Performance mode caches the grid between explicit updates.
     ShaderEffectSource {
         id: containerSource
         sourceItem: container
         hideSource: true
-        live: false
+        live: !root.performanceMode
         anchors.fill: container
         smooth: true
         visible: false
-        Component.onCompleted: scheduleUpdate()
+        Component.onCompleted: root.requestGlyphRefresh()
+    }
+
+    Loader {
+        id: softBaseLoader
+        anchors.fill: parent
+        active: !root.performanceMode
+        visible: false
+        sourceComponent: Component {
+            ShaderEffectSource {
+                objectName: "softBaseSource"
+                sourceItem: softBase
+                hideSource: true
+                smooth: true
+                visible: false
+                FastBlur {
+                    id: softBase
+                    anchors.fill: parent
+                    source: containerSource
+                    radius: 3
+                    transparentBorder: true
+                    visible: false
+                }
+            }
+        }
     }
 
     // Main GPU rain effect
@@ -170,7 +216,7 @@ WallpaperItem {
         id: rainColored
         anchors.fill: parent
         visible: false
-        property variant source: containerSource
+        property variant source: root.performanceMode ? containerSource : softBaseLoader.item
         property real simTime: root.simTime
         property real fallSpeed: activeConfig.fallSpeed !== undefined ? activeConfig.fallSpeed : 0.3
         property real raindropLength: activeConfig.raindropLength !== undefined ? activeConfig.raindropLength : 0.75
@@ -181,9 +227,9 @@ WallpaperItem {
 
         property real loops: 0.0
         property color glintColor: activeConfig.glintColor || '#c1ff75'
-        property color baseColor: root.activeGlyphColor
+        property color baseColor: root.performanceMode ? root.activeGlyphColor : Qt.hsla(root.activeHue, root.activeSat, 0.5, 1.0)
         property real trailBrightness: activeConfig.trailBrightness !== undefined ? activeConfig.trailBrightness : 1.0
-        property real glintIntensity: activeConfig.glintIntensity !== undefined ? activeConfig.glintIntensity : 1.0
+        property real glintIntensity: activeConfig.glintIntensity !== undefined ? activeConfig.glintIntensity : root.defaultConfig.glintIntensity
         fragmentShader: 'rain.frag.qsb'
     }
 
@@ -203,94 +249,36 @@ WallpaperItem {
             anchors.fill: parent
             property variant sourceTex: rainColoredSource
             property color glintColor: activeConfig.glintColor || '#c1ff75'
-            property real glintIntensity: activeConfig.glintIntensity !== undefined ? activeConfig.glintIntensity : 1.0
-            property real cursorIntensity: activeConfig.cursorIntensity !== undefined ? activeConfig.cursorIntensity : 2.0
+            property real glintIntensity: activeConfig.glintIntensity !== undefined ? activeConfig.glintIntensity : root.defaultConfig.glintIntensity
+            property real cursorIntensity: activeConfig.cursorIntensity !== undefined ? activeConfig.cursorIntensity : root.defaultConfig.cursorIntensity
             fragmentShader: 'squared.frag.qsb'
         }
     }
 
-    // Optimized Bloom Downsample Pyramid (Eliminates redundant multi-pass FastBlurs at full resolution)
-    property real currentBloomSize: activeConfig.bloomSize !== undefined ? activeConfig.bloomSize : 0.4
-    property real currentBloomStrength: activeConfig.bloomStrength !== undefined ? activeConfig.bloomStrength : 0.7
+    readonly property real currentBloomSize: activeConfig.bloomSize !== undefined ? activeConfig.bloomSize : defaultConfig.bloomSize
+    readonly property real currentBloomStrength: activeConfig.bloomStrength !== undefined ? activeConfig.bloomStrength : defaultConfig.bloomStrength
 
-    ShaderEffectSource {
-        id: pyr0Downsample
-        sourceItem: squaredContainer
-        width: Math.max(1, root.width * root.currentBloomSize)
-        height: Math.max(1, root.height * root.currentBloomSize)
-        sourceRect: Qt.rect(0, 0, root.width, root.height)
-        smooth: true
-        visible: false
-    }
-
-    ShaderEffectSource {
-        id: pyr1Downsample
-        sourceItem: pyr0Downsample
-        width: Math.max(1, pyr0Downsample.width / 2)
-        height: Math.max(1, pyr0Downsample.height / 2)
-        sourceRect: Qt.rect(0, 0, pyr0Downsample.width, pyr0Downsample.height)
-        smooth: true
-        visible: false
-    }
-    FastBlur {
-        id: pyr1Blur
-        anchors.fill: pyr1Downsample
-        source: pyr1Downsample
-        radius: 8
-        transparentBorder: true
-        visible: false
-    }
-    ShaderEffectSource {
-        id: pyr1Source
-        sourceItem: pyr1Blur
-        anchors.fill: pyr1Blur
-        smooth: true
-        visible: false
-    }
-
-    ShaderEffectSource {
-        id: pyr2Downsample
-        sourceItem: pyr1Source
-        width: Math.max(1, pyr1Downsample.width / 2)
-        height: Math.max(1, pyr1Downsample.height / 2)
-        sourceRect: Qt.rect(0, 0, pyr1Downsample.width, pyr1Downsample.height)
-        smooth: true
-        visible: false
-    }
-
-    ShaderEffectSource {
-        id: pyr3Downsample
-        sourceItem: pyr2Downsample
-        width: Math.max(1, pyr2Downsample.width / 2)
-        height: Math.max(1, pyr2Downsample.height / 2)
-        sourceRect: Qt.rect(0, 0, pyr2Downsample.width, pyr2Downsample.height)
-        smooth: true
-        visible: false
-    }
-
-    ShaderEffectSource {
-        id: pyr4Downsample
-        sourceItem: pyr3Downsample
-        width: Math.max(1, pyr3Downsample.width / 2)
-        height: Math.max(1, pyr3Downsample.height / 2)
-        sourceRect: Qt.rect(0, 0, pyr3Downsample.width, pyr3Downsample.height)
-        smooth: true
-        visible: false
-    }
-
-    ShaderEffect {
-        id: finalComposite
+    Loader {
+        id: bloomLoader
+        objectName: "bloomLoader"
         anchors.fill: parent
-        property variant primaryTex: rainColoredSource
-        property variant pyr0Tex: pyr0Downsample
-        property variant pyr1Tex: pyr1Source
-        property variant pyr2Tex: pyr2Downsample
-        property variant pyr3Tex: pyr3Downsample
-        property variant pyr4Tex: pyr4Downsample
-        property real bloomStrength: root.currentBloomStrength
-        property color glintColor: activeConfig.glintColor || '#c1ff75'
-
-        fragmentShader: 'compose.frag.qsb'
+        sourceComponent: root.performanceMode ? performanceBloomComponent : fullBloomComponent
+    }
+    Component {
+        id: fullBloomComponent
+        FullBloom {
+            activeConfig: root.activeConfig
+            bloomInput: squaredContainer
+            primarySource: rainColoredSource
+        }
+    }
+    Component {
+        id: performanceBloomComponent
+        PerformanceBloom {
+            activeConfig: root.activeConfig
+            bloomInput: squaredContainer
+            primarySource: rainColoredSource
+        }
     }
 
     property real internalSimTime: 0.0

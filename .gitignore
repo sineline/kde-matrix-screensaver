@@ -17,6 +17,7 @@ diff*.png
 
 # Python scratch scripts
 *.py
+!scripts/test_modes.py
 
 # Logs
 *.log

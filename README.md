@@ -48,6 +48,36 @@ To update an existing installation, use `-u` instead of `-i`.
 - KDE Plasma 6.0 or later
 - Qt 6 with QtQuick and Qt5Compat.GraphicalEffects
 
+## Rendering modes
+
+The default mode uses the original five-level bloom, softened glyphs, cursor-derived
+trail palette, and frequent character changes. **Performance Mode** is opt-in in
+the wallpaper settings: it uses reduced bloom, a cached glyph grid, sparse character
+changes, and a darker configurable trail colour. This trades visual fidelity for
+lower rendering work; actual performance depends on your hardware and settings.
+Only the selected bloom pipeline is loaded. Reset to Defaults disables Performance
+Mode. Existing settings without a mode entry also use the default mode.
+
+The settings page includes a fullscreen preview of the current, unsaved values.
+Click or press a key to close the preview.
+
+## Testing changes locally
+
+With Python 3, PyQt6 (including QtTest), and the Qt/KDE QML modules installed:
+
+```bash
+python3 scripts/test_modes.py
+python3 scripts/test_modes.py --settings
+```
+
+The first command runs offscreen functional checks for both rendering modes,
+configuration defaults, reset notifications, glyph updates, and preview lifecycle.
+The second opens standalone settings and preview windows without installing the
+wallpaper or saving anything to Plasma. Try both modes and change grid size, bloom,
+and cycle speed, including zero. Offscreen checks cannot establish GPU image
+correctness, frame pacing, or Plasma settings persistence/crash behaviour; those
+require testing in the actual desktop session.
+
 ## Credits & Acknowledgements
 
 The digital rain mechanics, aesthetic logic, and Matrix-Code font are credited to **Rezmason** and their amazing [Matrix](https://github.com/rezmason/matrix) project, released under the MIT License. This native KDE port was built to bring their meticulously crafted digital rain effect to Linux desktop users without WebGL driver issues.
